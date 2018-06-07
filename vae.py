@@ -24,6 +24,8 @@ class VAE(nn.Module):
     def __init__(self,input_Dim,hidden_unit,latent_Dim):
         super(VAE,self).__init__()
 
+        # See paper appendix C1
+
         # Map to latent representative space
         self.layer11 = nn.Linear(input_Dim,hidden_unit)
         self.mu_layer12 = nn.Linear(hidden_unit,latent_Dim)
@@ -53,6 +55,8 @@ class VAE(nn.Module):
 
         return z_tilde
 
+
+
     def encode(self,x):
 
         #encode
@@ -68,7 +72,12 @@ class VAE(nn.Module):
         normal = torch.distributions.Normal(mu, torch.exp(log_std)**2)
         log_q_z_given_x = torch.sum(normal.log_prob(z_tilde))
 
-        return log_q_z_given_x, z_tilde,mu,log_std
+        return z_tilde,mu,log_std
+
+    def log_q_z_given_x(self,z_tilde,mu,log_std):
+        normal = torch.distributions.Normal(mu, torch.exp(log_std)**2)
+        log_q_z_given_x = torch.sum(normal.log_prob(z_tilde))
+        return log_q_z_given_x
 
     def prior_log_p_z(self,z):
         normal = dist.Normal(0,1)
@@ -89,12 +98,12 @@ class VAE(nn.Module):
 
     def forward(self, x):
 
-        log_q_z_given_x, z_tilde,mu,log_std = self.encode(x)
+        z_tilde,mu,log_std = self.encode(x)
         log_p_x_given_z = self.bernoulli_decode(z_tilde,x)
 
-        return log_p_x_given_z,log_q_z_given_x,z_tilde,mu,log_std
+        return log_p_x_given_z,z_tilde,mu,log_std
 
-    def objective_func(self, log_p_x_given_z,log_q_z_given_x, z_tilde,mu,log_std):
+    def objective_func(self, log_p_x_given_z,mu,log_std):
 
         KL = -0.5 * torch.mean(torch.mean(1 + log_std - (mu ** 2) - torch.exp(log_std),dim=1))
         neg_elbo = (KL + log_p_x_given_z)
@@ -118,9 +127,9 @@ def train_vae(vae,opt,iters,batch_size,dataX,dataY):
             indices = permutation[m:m + batch_size]
             batch_x, batch_y = dataX[indices], dataY[indices]
 
-            log_p_x_given_z, log_q_z_given_x, z_tilde,mu,log_std= vae(batch_x)
+            log_p_x_given_z, z_tilde,mu,log_std= vae(batch_x)
 
-            loss = vae.objective_func(log_p_x_given_z,log_q_z_given_x,z_tilde,mu,log_std)
+            loss = vae.objective_func(log_p_x_given_z,mu,log_std)
 
             train_loss += loss
             loss.backward()
@@ -138,7 +147,7 @@ np.random.seed(14)
 vae = VAE(D,400,20)
 opt = optim.Adam(vae.parameters(), lr=1e-3)
 
-loss_curve = train_vae(vae,opt,1000,50,train_images,train_labels)
+loss_curve = train_vae(vae,opt,2000,50,train_images,train_labels)
 
 plt.plot(loss_curve)
 plt.title('Loss Value')
