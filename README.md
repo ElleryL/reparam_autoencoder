@@ -2,10 +2,10 @@
 
 This project implement the idea in paper "Auto-Encoding Variational Bayes"
 
-Given a set of data points. We believe that there is an underlyding latent structure influence on our observations.
+So given any set of Bernoulli distributed data, this model will learn the underlyding latent structure of data where we propose the latent posterior dist as Gaussian
 
-However, posterior distribution p(z|x) = p(x|z)p(z) / Z; where Z is intractable. If p(x|z) and p(z) not conjugate prior
+We use mnist binary image data set as a tester.
 
-We proposed easy computable q(z|x) and optimize the distance between q(z|x) and true posterior p(z|x) through autoencoder; 
-
-When reconstruction image is similar to input image, we say that latent space is well-modeled
+Future Plan:
+(1) Generalized into categorical and continuous input data distribution
+(2) It will incorporate reLAX estimator from grad_est to deal with discrete latent posterior dist 
