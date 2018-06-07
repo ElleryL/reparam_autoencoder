@@ -113,8 +113,6 @@ class VAE(nn.Module):
         return neg_elbo
 
 
-
-
 def train_vae(vae,opt,iters,batch_size,dataX,dataY):
     permutation = torch.randperm(train_images.size()[0])
 
