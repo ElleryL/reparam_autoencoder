@@ -69,8 +69,7 @@ class VAE(nn.Module):
         # reparameterization it first
         z_tilde = self.reparameterization(mu, log_std)
 
-        normal = torch.distributions.Normal(mu, torch.exp(log_std)**2)
-        log_q_z_given_x = torch.sum(normal.log_prob(z_tilde))
+
 
         return z_tilde,mu,log_std
 
