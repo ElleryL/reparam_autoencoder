@@ -83,9 +83,7 @@ class VAE(nn.Module):
         return y
 
     def log_P_x_given_z(self,y,x):
-        # y = y.clamp(min=1e-8, max=1 - 1e-8)
-        # log_p_x_given_z =  -(x * torch.log(y) + (1 - x) * torch.log(1 - y))
-        return F.binary_cross_entropy(y,x)
+        return F.binary_cross_entropy(y,x,size_average=False)
 
     def forward(self, x):
 
@@ -96,7 +94,7 @@ class VAE(nn.Module):
 
     def objective_func(self, z_tilde,log_p_x_given_z,mu,log_std):
 
-        KL = -0.5 * torch.sum(torch.sum(1 + log_std - (mu ** 2) - torch.exp(log_std),dim=1))
+        KL = -0.5 * torch.sum(1 + log_std - (mu ** 2) - torch.exp(log_std))
         neg_elbo = (KL + log_p_x_given_z)
 
         # log_q_z_given_x = self.log_Q_z_given_x(z_tilde,mu,log_std)
@@ -152,7 +150,7 @@ np.random.seed(14)
 vae = VAE(D,400,20)
 opt = optim.Adam(vae.parameters(), lr=1e-3)
 
-loss_curve = train_vae(vae,opt,1000,50,train_images,train_labels)
+loss_curve = train_vae(vae,opt,200,50,train_images,train_labels)
 
 # we do some simple Turing test here
 simulateImage(test_images[:10],vae)
