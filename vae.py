@@ -3,10 +3,10 @@ from torch import nn, optim
 import torch.nn.functional as F
 import numpy as np
 import random
-from torch.autograd import Variable
 from data import load_mnist, plot_images, save_images
 import matplotlib.pyplot as plt
 import torch.distributions as dist
+
 
 
 # Load MNIST and Set Up Data
@@ -52,10 +52,7 @@ class VAE(nn.Module):
         eps = torch.FloatTensor(log_std.size()).normal_(0, 1)
         std = torch.exp(log_std)
         z_tilde = mu + std*eps
-
         return z_tilde
-
-
 
     def encode(self,x):
 
@@ -64,16 +61,13 @@ class VAE(nn.Module):
         mu = (self.mu_layer12(h1))
         log_std = (self.log_std_layer12(h1))
 
-
         # Instead of directly sample variational parameters from this latent space q(z|x)
         # reparameterization it first
         z_tilde = self.reparameterization(mu, log_std)
 
-
-
         return z_tilde,mu,log_std
 
-    def log_q_z_given_x(self,z_tilde,mu,log_std):
+    def log_Q_z_given_x(self,z_tilde,mu,log_std):
         normal = torch.distributions.Normal(mu, torch.exp(log_std)**2)
         log_q_z_given_x = torch.sum(normal.log_prob(z_tilde))
         return log_q_z_given_x
@@ -83,31 +77,30 @@ class VAE(nn.Module):
         return torch.sum(normal.log_prob(z))
 
 
-    def bernoulli_decode(self, z_tilde, x):
-
+    def bernoulli_decode(self, z_tilde):
         h1 = self.Tanh(self.layer21(z_tilde))
-
         y = self.Sig(self.layer22(h1))
+        return y
 
-        # for reconstruction we can directly compute p(x|z)
-        log_p_x_given_z = F.binary_cross_entropy(y, x, size_average=False)
-
-        return log_p_x_given_z  #normalize
-
+    def log_P_x_given_z(self,y,x):
+        y = y.clamp(min=1e-8, max=1 - 1e-8)
+        log_p_x_given_z =  -(x * torch.log(y) + (1 - x) * torch.log(1 - y))
+        return log_p_x_given_z
 
     def forward(self, x):
 
         z_tilde,mu,log_std = self.encode(x)
-        log_p_x_given_z = self.bernoulli_decode(z_tilde,x)
+        y = self.bernoulli_decode(z_tilde)
 
-        return log_p_x_given_z,z_tilde,mu,log_std
+        return y,z_tilde,mu,log_std
 
-    def objective_func(self, log_p_x_given_z,mu,log_std):
+    def objective_func(self, z_tilde,log_p_x_given_z,mu,log_std):
 
         KL = -0.5 * torch.mean(torch.mean(1 + log_std - (mu ** 2) - torch.exp(log_std),dim=1))
-        neg_elbo = (KL + log_p_x_given_z)
+        neg_elbo = (KL + log_p_x_given_z.mean())
 
-        #neg_elbo = (log_q_z_given_x + self.prior_log_p_z(z_tilde)).mean() - log_p_x_given_z
+        # log_q_z_given_x = self.log_Q_z_given_x(z_tilde,mu,log_std)
+        # neg_elbo = (log_q_z_given_x + self.prior_log_p_z(z_tilde)).mean() - log_p_x_given_z
 
         return neg_elbo
 
@@ -119,14 +112,13 @@ def train_vae(vae,opt,iters,batch_size,dataX,dataY):
     for i in range(iters):
         train_loss = 0
         for m in range(0,dataX.size()[0],batch_size):
-
             opt.zero_grad()
             indices = permutation[m:m + batch_size]
             batch_x, batch_y = dataX[indices], dataY[indices]
 
-            log_p_x_given_z, z_tilde,mu,log_std= vae(batch_x)
-
-            loss = vae.objective_func(log_p_x_given_z,mu,log_std)
+            y, z_tilde,mu,log_std= vae(batch_x)
+            log_p_x_given_z = vae.log_P_x_given_z(y,batch_x)
+            loss = vae.objective_func(z_tilde,log_p_x_given_z,mu,log_std)
 
             train_loss += loss
             loss.backward()
@@ -134,9 +126,30 @@ def train_vae(vae,opt,iters,batch_size,dataX,dataY):
         if i%50 == 0:
             print("Loss at {} is {}".format(i, train_loss/batch_size))
         loss_curve.append(train_loss/batch_size)
-
-
+    plt.plot(loss_curve)
+    plt.title('Loss Value')
+    plt.show()
     return loss_curve
+
+def simulateImage(dataX,vae):
+    '''
+    Checked the decoded image to see if it similar to input image
+    :param dataX: an image to be decode and encode
+    :param vae: a well trained VAE
+    :return:
+    '''
+    y, z_tilde,mu,log_std= vae(dataX)
+    # img = y.data.numpy().reshape(28,28)
+    # plt.imshow(img)
+    # plt.show()
+    # img = dataX.data.numpy().reshape(28,28)
+    # plt.imshow(img)
+    # plt.show()
+
+    img = np.concatenate((dataX.data.numpy().reshape(1,-1),y.data.numpy().reshape(1,-1)),axis=0)
+    plot_images(img,plt,ims_per_row=2)
+    plt.show()
+
 
 torch.manual_seed(14)
 random.seed(14)
@@ -144,8 +157,12 @@ np.random.seed(14)
 vae = VAE(D,400,20)
 opt = optim.Adam(vae.parameters(), lr=1e-3)
 
-loss_curve = train_vae(vae,opt,2000,50,train_images,train_labels)
+loss_curve = train_vae(vae,opt,500,50,train_images,train_labels)
 
-plt.plot(loss_curve)
-plt.title('Loss Value')
-plt.show()
+
+simulateImage(test_images[14],vae)
+
+
+
+
+
