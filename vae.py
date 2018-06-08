@@ -12,6 +12,7 @@ import torch.distributions as dist
 # Load MNIST and Set Up Data
 N = 500
 D = 784
+S = 50 # sample size for variational params
 N_data, train_images, train_labels, test_images, test_labels = load_mnist()
 train_images = torch.from_numpy(np.round(train_images[0:N])).float()
 train_labels = torch.from_numpy(train_labels[0:N]).float()
@@ -49,7 +50,8 @@ class VAE(nn.Module):
         :param log_std: log_std from encoding
         :return:
         '''
-        eps = torch.FloatTensor(log_std.size()).normal_(0, 1)
+        #eps = torch.FloatTensor(log_std.size()).normal_(0, 1)
+        eps = torch.ones([S,log_std.size()[0],log_std.size()[1]]).normal_(0, 1)
         std = torch.exp(log_std)
         z_tilde = mu + std*eps
         return z_tilde
@@ -69,12 +71,14 @@ class VAE(nn.Module):
 
     def log_Q_z_given_x(self,z_tilde,mu,log_std):
         normal = torch.distributions.Normal(mu, torch.exp(log_std)**2)
-        log_q_z_given_x = torch.sum(normal.log_prob(z_tilde))
+        log_q_z_given_x = torch.mean(torch.sum(normal.log_prob(z_tilde),dim=2),dim=1)
+
+
         return log_q_z_given_x
 
     def prior_log_p_z(self,z):
         normal = dist.Normal(0,1)
-        return torch.sum(normal.log_prob(z))
+        return torch.mean(normal.log_prob(z.mean(0)),dim=1)
 
 
     def bernoulli_decode(self, z_tilde):
@@ -88,7 +92,7 @@ class VAE(nn.Module):
     def forward(self, x):
 
         z_tilde,mu,log_std = self.encode(x)
-        y = self.bernoulli_decode(z_tilde)
+        y = self.bernoulli_decode(z_tilde.mean(0))
 
         return y,z_tilde,mu,log_std
 
@@ -97,8 +101,10 @@ class VAE(nn.Module):
         KL = -0.5 * torch.sum(1 + log_std - (mu ** 2) - torch.exp(log_std))
         neg_elbo = (KL + log_p_x_given_z)
 
-        # log_q_z_given_x = self.log_Q_z_given_x(z_tilde,mu,log_std)
-        # neg_elbo = (log_q_z_given_x + self.prior_log_p_z(z_tilde)) - log_p_x_given_z.sum()
+        log_q_z_given_x = self.log_Q_z_given_x(z_tilde,mu,log_std)
+
+        neg_elbo = ((log_p_x_given_z + self.prior_log_p_z(z_tilde).mean()) - log_q_z_given_x.mean())
+
 
         return neg_elbo
 
@@ -150,7 +156,7 @@ np.random.seed(14)
 vae = VAE(D,400,20)
 opt = optim.Adam(vae.parameters(), lr=1e-3)
 
-loss_curve = train_vae(vae,opt,200,50,train_images,train_labels)
+loss_curve = train_vae(vae,opt,500,50,train_images,train_labels)
 
 # we do some simple Turing test here
 simulateImage(test_images[:10],vae)
