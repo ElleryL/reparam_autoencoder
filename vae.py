@@ -76,7 +76,8 @@ class VAE(nn.Module):
         return y
 
     def Recon_Loss(self, y, x):
-        return F.binary_cross_entropy(y,x,size_average=False)
+        loss = -torch.sum(x*torch.log(1e-5+y) + (1-x)*torch.log(1e-5+1-y))
+        return loss
 
     def forward(self, x):
 
@@ -88,12 +89,12 @@ class VAE(nn.Module):
     def objective_func(self,recon_loss,mu,log_std):
 
         KL = -0.5 * torch.sum(1 + log_std - (mu ** 2) - torch.exp(log_std))
-        neg_elbo = (KL + recon_loss)
+        neg_elbo = (KL/log_std.size()[0] + recon_loss)
 
         return neg_elbo
 
 
-def train_vae(vae,opt,iters,batch_size,dataX,dataY):
+def train_vae(vae,opt,iters,batch_size,dataX):
     permutation = torch.randperm(train_images.size()[0])
 
     loss_curve = []
@@ -102,7 +103,7 @@ def train_vae(vae,opt,iters,batch_size,dataX,dataY):
         for m in range(0,dataX.size()[0],batch_size):
             opt.zero_grad()
             indices = permutation[m:m + batch_size]
-            batch_x, batch_y = dataX[indices], dataY[indices]
+            batch_x = dataX[indices]
 
             y, z_tilde,mu,log_std= vae(batch_x)
             recon_loss = vae.Recon_Loss(y, batch_x)
@@ -140,7 +141,7 @@ np.random.seed(14)
 vae = VAE(D,400,20)
 opt = optim.Adam(vae.parameters(), lr=1e-3)
 
-loss_curve = train_vae(vae,opt,1000,50,train_images,train_labels)
+loss_curve = train_vae(vae,opt,2000,500,train_images)
 
 # we do some simple test here
 simulateImage(test_images[:10],vae)
