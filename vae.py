@@ -10,7 +10,7 @@ import torch.distributions as dist
 
 
 # Load MNIST and Set Up Data
-N = 300
+N = 500
 D = 784
 N_data, train_images, train_labels, test_images, test_labels = load_mnist()
 train_images = torch.from_numpy(np.round(train_images[0:N])).float()
@@ -83,9 +83,9 @@ class VAE(nn.Module):
         return y
 
     def log_P_x_given_z(self,y,x):
-        y = y.clamp(min=1e-8, max=1 - 1e-8)
-        log_p_x_given_z =  -(x * torch.log(y) + (1 - x) * torch.log(1 - y))
-        return log_p_x_given_z
+        # y = y.clamp(min=1e-8, max=1 - 1e-8)
+        # log_p_x_given_z =  -(x * torch.log(y) + (1 - x) * torch.log(1 - y))
+        return F.binary_cross_entropy(y,x)
 
     def forward(self, x):
 
@@ -96,11 +96,11 @@ class VAE(nn.Module):
 
     def objective_func(self, z_tilde,log_p_x_given_z,mu,log_std):
 
-        KL = -0.5 * torch.mean(torch.mean(1 + log_std - (mu ** 2) - torch.exp(log_std),dim=1))
-        neg_elbo = (KL + log_p_x_given_z.mean())
+        KL = -0.5 * torch.sum(torch.sum(1 + log_std - (mu ** 2) - torch.exp(log_std),dim=1))
+        neg_elbo = (KL + log_p_x_given_z)
 
         # log_q_z_given_x = self.log_Q_z_given_x(z_tilde,mu,log_std)
-        # neg_elbo = (log_q_z_given_x + self.prior_log_p_z(z_tilde)).mean() - log_p_x_given_z
+        # neg_elbo = (log_q_z_given_x + self.prior_log_p_z(z_tilde)) - log_p_x_given_z.sum()
 
         return neg_elbo
 
@@ -139,16 +139,11 @@ def simulateImage(dataX,vae):
     :return:
     '''
     y, z_tilde,mu,log_std= vae(dataX)
-    # img = y.data.numpy().reshape(28,28)
-    # plt.imshow(img)
-    # plt.show()
-    # img = dataX.data.numpy().reshape(28,28)
-    # plt.imshow(img)
-    # plt.show()
 
-    img = np.concatenate((dataX.data.numpy().reshape(1,-1),y.data.numpy().reshape(1,-1)),axis=0)
-    plot_images(img,plt,ims_per_row=2)
+    img = np.concatenate((dataX.data.numpy(),y.data.numpy()),axis=0)
+    plot_images(img,plt,ims_per_row=10)
     plt.show()
+
 
 
 torch.manual_seed(14)
@@ -157,12 +152,10 @@ np.random.seed(14)
 vae = VAE(D,400,20)
 opt = optim.Adam(vae.parameters(), lr=1e-3)
 
-loss_curve = train_vae(vae,opt,500,50,train_images,train_labels)
+loss_curve = train_vae(vae,opt,1000,50,train_images,train_labels)
 
-
-simulateImage(test_images[14],vae)
-
-
+# we do some simple Turing test here
+simulateImage(test_images[:10],vae)
 
 
 
