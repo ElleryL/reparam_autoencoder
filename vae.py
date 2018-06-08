@@ -156,7 +156,7 @@ np.random.seed(14)
 vae = VAE(D,400,20)
 opt = optim.Adam(vae.parameters(), lr=1e-3)
 
-loss_curve = train_vae(vae,opt,500,50,train_images,train_labels)
+loss_curve = train_vae(vae,opt,200,50,train_images,train_labels)
 
 # we do some simple Turing test here
 simulateImage(test_images[:10],vae)
